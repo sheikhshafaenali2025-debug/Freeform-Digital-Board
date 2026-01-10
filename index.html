@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inkboard | Digital Board</title>
+
+    <!-- Fonts: 'Outfit' for UI, 'Kalam' for Notes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Outfit:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
+
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Main Toolbar -->
+    <div id="toolbar" class="toolbar glass-panel">
+        <div class="logo">
+            <i class="fa-solid fa-pen-fancy"></i>
+            <span class="brand-text">Inkboard</span>
+        </div>
+        <div class="tools">
+            <button id="add-note-btn" title="Add Sticky Note"><i class="fa-solid fa-note-sticky"></i> Note</button>
+            <button id="add-image-btn" title="Add Image"><i class="fa-solid fa-image"></i> Image</button>
+            <button id="add-todo-btn" title="Add Checklist"><i class="fa-solid fa-list-check"></i> To-Do</button>
+            <div class="divider"></div>
+            <button id="undo-btn" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+            <button id="redo-btn" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+        <div class="meta-tools">
+            <button id="theme-toggle" title="Toggle Chill/Study Mode"><i class="fa-solid fa-moon"></i></button>
+            <button id="save-snap-btn" title="Save Snapshot"><i class="fa-solid fa-floppy-disk"></i></button>
+        </div>
+    </div>
+
+    <!-- Infinite Canvas Container -->
+    <div id="canvas-container">
+        <div id="canvas-content">
+            <!-- Pins will be injected here -->
+            <div id="onboarding-hint" class="hint-text">
+                <h3>Welcome to your Board! ✨</h3>
+                <p>Drag notes here. Double click to edit.</p>
+                <p class="sub-hint">Data is saved locally automatically.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls glass-panel">
+        <button id="zoom-out"><i class="fa-solid fa-minus"></i></button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in"><i class="fa-solid fa-plus"></i></button>
+    </div>
+
+    <!-- Hidden File Input for Images -->
+    <input type="file" id="image-upload" accept="image/*" style="display: none;">
+
+    <!-- Bundled Logic (No Module) for file:// support -->
+    <script src="app.js"></script>
+</body>
+
+</html>

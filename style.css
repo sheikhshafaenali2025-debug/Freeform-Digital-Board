@@ -1,0 +1,377 @@
+:root {
+    /* Palette: Soft modern teal/peach with warm neutrals */
+    --bg-color: #fbfcfe;
+    --bg-pattern: linear-gradient(180deg, rgba(250,250,252,0.6) 0%, rgba(245,250,250,0.6) 100%);
+    --bg-size: 20px 20px;
+
+    --text-primary: #0f172a; /* dark slate */
+    --text-secondary: #475569; /* muted slate */
+
+    --accent-color: #06b6d4; /* teal */
+    --accent-strong: #0ea5a9;
+    --accent-contrast: #ff7a59; /* warm accent for highlights */
+
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(15, 23, 42, 0.06);
+    --glass-shadow: 0 10px 30px rgba(2,6,23,0.08);
+
+    /* Fonts (index.html already loads these) */
+    --font-ui: 'Outfit', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    --font-note: 'Kalam', 'Segoe Script', cursive;
+
+    /* Note Colors (gentle painters palette) */
+    --note-yellow: #fff7e6;
+    --note-blue: #e6f6ff;
+    --note-green: #e9fff6;
+    --note-pink: #fff0f6;
+
+    /* Background image (place an image at assets/background.jpg or change this URL) */
+    --bg-image: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRFHvAUZTeDYAcuSueNfFp1MMaqUjpvBX15xw&s');
+}
+
+[data-theme="dark"] {
+    --bg-color: #111827;
+    --bg-pattern: radial-gradient(#374151 1px, transparent 1px);
+    --text-primary: #f9fafb;
+    --text-secondary: #9ca3af;
+    --glass-bg: rgba(31, 41, 55, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-ui);
+    background-color: var(--bg-color);
+    /* Layered background: subtle overlay -> image -> pattern */
+    background-image: linear-gradient(rgba(255,255,255,0.35), rgba(255,255,255,0.35)), var(--bg-image), var(--bg-pattern);
+    background-size: cover, cover, var(--bg-size);
+    background-position: center center, center center, 0 0;
+    background-repeat: no-repeat, no-repeat, repeat;
+    color: var(--text-primary);
+    overflow: hidden; /* Canvas handles scrolling */
+    height: 100vh;
+    width: 100vw;
+    transition: background-color 0.3s ease;
+}
+
+/* --- Glassmorphism UI --- */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 16px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* --- Toolbar --- */
+.toolbar {
+    position: fixed;
+    top: 50%;
+    left: 18px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    z-index: 1100;
+    width: 72px;
+    max-width: 72px;
+    justify-content: flex-start;
+}
+
+.logo {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.logo .brand-text { font-size: 0.9rem; }
+
+.tools {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-direction: column;
+}
+
+.tools button, .meta-tools button {
+    background: transparent;
+    border: none;
+    padding: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+}
+
+.tools button:hover, .meta-tools button:hover {
+    background: rgba(6,182,212,0.06);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(6,182,212,0.06);
+}
+
+[data-theme="dark"] .tools button:hover {
+    background: rgba(10, 132, 153, 0.08);
+}
+[data-theme="dark"] .tools button:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.tools button:active {
+    transform: scale(0.95);
+}
+
+.divider {
+    width: 32px;
+    height: 1px;
+    background: var(--text-secondary);
+    opacity: 0.14;
+    transform: rotate(90deg);
+}
+
+/* --- Canvas --- */
+#canvas-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    cursor: grab;
+}
+
+#canvas-container:active {
+    cursor: grabbing;
+}
+
+#canvas-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5000px; /* Huge virtual space */
+    height: 5000px;
+    transform-origin: 0 0;
+    /* transform is handled by JS */
+}
+
+/* --- Onboarding Hint --- */
+.hint-text {
+    position: absolute;
+    left: 50vw;
+    top: 50vh;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+}
+
+.hint-text h3 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+/* --- Pins --- */
+.pin {
+    position: absolute;
+    width: 250px;
+    min-height: 200px;
+    background: var(--note-yellow);
+    border-radius: 12px; /* softer corners */
+    box-shadow: 0 10px 30px rgba(2,6,23,0.08);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-note);
+    font-size: 1.2rem;
+    line-height: 1.4;
+    color: #333; /* Ink color */
+    
+    /* Selection Ring */
+    outline: 2px solid transparent;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, outline 0.12s ease, opacity 0.18s ease;
+    user-select: none;
+}
+
+.pin.selected {
+    box-shadow: 0 0 0 3px rgba(6,182,212,0.18), 8px 18px 40px rgba(2,6,23,0.14);
+    z-index: 1100;
+    transform: translateY(-6px) scale(1.02);
+}
+
+.pin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    cursor: grab;
+}
+
+.pin:hover .pin-header {
+    opacity: 1;
+}
+
+/* Pin hover lift + subtle scale */
+.pin:hover {
+    transform: translateY(-6px) scale(1.02);
+    box-shadow: 0 18px 40px rgba(2,6,23,0.12);
+}
+
+/* Entry animation for pins */
+.pin { 
+    animation: fadeUp 360ms ease both;
+}
+
+.pin-drag-handle {
+    flex-grow: 1;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pin-date {
+    font-size: 0.8rem;
+    font-family: var(--font-ui);
+}
+
+.pin-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #ef4444;
+    padding: 4px;
+    border-radius: 50%;
+}
+
+.pin-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.pin-content {
+    flex-grow: 1;
+    outline: none;
+    white-space: pre-wrap;
+    cursor: text;
+}
+
+/* Pin Colors */
+.pin.color-yellow { background-color: var(--note-yellow); }
+.pin.color-blue { background-color: var(--note-blue); }
+.pin.color-green { background-color: var(--note-green); }
+.pin.color-pink { background-color: var(--note-pink); }
+
+/* Image Pin Overrides */
+.pin.type-image {
+    background: #fff;
+    padding: 8px;
+    width: auto;
+    min-width: 200px;
+    max-width: 400px;
+    min-height: unset;
+}
+
+.pin.type-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 4px;
+    pointer-events: none; /* Let the pin handle drag events */
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    z-index: 1000;
+}
+
+.zoom-controls button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+.zoom-controls button:hover {
+    background: rgba(0,0,0,0.1);
+}
+
+#zoom-level {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    min-width: 40px;
+    text-align: center;
+}
+
+/* Footer layout (if present in markup) */
+.footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    align-items: center;
+    z-index: 1000;
+    pointer-events: none; /* allows clicks to pass to canvas unless hovered */
+}
+
+.footer .item {
+    pointer-events: auto;
+    background: rgba(255,255,255,0.9);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-family: var(--font-ui);
+    color: var(--text-secondary);
+    box-shadow: 0 6px 18px rgba(2,6,23,0.06);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Small utility animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px) scale(0.995); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.fade-in { animation: fadeIn 420ms ease both; }
+.scale-on-hover { transition: transform 0.18s ease; }
+.scale-on-hover:hover { transform: scale(1.04); }
