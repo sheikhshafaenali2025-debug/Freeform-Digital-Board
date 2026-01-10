@@ -60,6 +60,4 @@ python -m http.server 8000
 
 This is a small local project — grab the code, make improvements, and open a PR or file issues describing desired changes. Keep changes minimal and consistent with the existing style.
 
-## License
 
-MIT-style or include your preferred license here.
