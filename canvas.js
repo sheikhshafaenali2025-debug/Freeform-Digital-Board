@@ -6,25 +6,30 @@ export class CanvasController {
         this.container = document.getElementById('canvas-container');
         this.content = document.getElementById('canvas-content');
         this.zoomLevelEl = document.getElementById('zoom-level');
-        this.pinMap = new Map(); // id -> Element
+        this.pinMap = new Map(); // id -> PinComponent
 
-        // Drag State
+        // Interaction state
         this.isDraggingBoard = false;
-        this.isDraggingPin = false;
         this.dragStart = { x: 0, y: 0 };
-        this.dragOffset = { x: 0, y: 0 }; // Pan buffer
+        this.dragOffset = { x: 0, y: 0 };
+
+        this.isDraggingPin = false;
         this.activePinId = null;
+        this.initialPinPos = { x: 0, y: 0 };
+        this.lastKnownPinPos = null;
+
+        // Bind handlers
+        this._onPointerMove = this._onPointerMove.bind(this);
+        this._onPointerUp = this._onPointerUp.bind(this);
 
         this._setupListeners();
-        this._renderLoop(); // Use requestAnimationFrame if needed, but event-driven is fine via notify
     }
 
     handleUpdate(pins, viewState, type, payload) {
-        // View Update
+        // Apply view transform
         this.content.style.transform = `translate(${viewState.pan.x}px, ${viewState.pan.y}px) scale(${viewState.zoom})`;
-        this.zoomLevelEl.textContent = `${Math.round(viewState.zoom * 100)}%`;
+        if (this.zoomLevelEl) this.zoomLevelEl.textContent = `${Math.round(viewState.zoom * 100)}%`;
 
-        // Pin Update strategy
         if (type === 'REFRESH') {
             this._renderAll(pins);
         } else if (type === 'ADD') {
@@ -38,9 +43,10 @@ export class CanvasController {
 
     _renderAll(pins) {
         this.content.innerHTML = '';
-        this.content.appendChild(document.getElementById('onboarding-hint')); // Keep hint
+        const hint = document.getElementById('onboarding-hint');
+        if (hint) this.content.appendChild(hint);
         this.pinMap.clear();
-        pins.forEach(pin => this._renderPin(pin));
+        pins.forEach(p => this._renderPin(p));
     }
 
     _renderPin(data) {
@@ -54,174 +60,154 @@ export class CanvasController {
         this.content.appendChild(pinCmp.element);
         this.pinMap.set(data.id, pinCmp);
 
-        // Attach MouseDown for Dragging directly to the element wrapper
-        pinCmp.element.addEventListener('mousedown', (e) => this._onPinMouseDown(e, data.id));
+        // Attach pointerdown to the whole pin element (ignore content/delete inside handler)
+        const handle = pinCmp.element;
+        handle.style.touchAction = 'none';
+        handle.addEventListener('pointerdown', (ev) => {
+            this._startPinDrag(ev, data.id);
+        });
     }
 
     _updatePinDOM(data) {
         const cmp = this.pinMap.get(data.id);
-        if (cmp) {
-            cmp.data = data;
-            cmp.updatePosition();
-            // Content updates are usually handled by internal listeners mostly
+        if (!cmp) return;
+        cmp.data = data;
+        cmp.updatePosition();
+        // If pin was being dragged visually, ensure DOM matches state
+        if (!this.isDraggingPin) {
+            cmp.element.style.left = `${data.x}px`;
+            cmp.element.style.top = `${data.y}px`;
         }
     }
 
     _removePinDOM(id) {
         const cmp = this.pinMap.get(id);
-        if (cmp) {
-            cmp.element.remove();
-            this.pinMap.delete(id);
-        }
+        if (!cmp) return;
+        cmp.element.remove();
+        this.pinMap.delete(id);
     }
 
-    // --- Interaction Logic ---
-
+    /* --- Interaction / Dragging --- */
     _setupListeners() {
-        // Board Panning (Space + Drag or Middle Click)
-        this.container.addEventListener('mousedown', (e) => {
-            if (e.target === this.container || e.target === this.content || (e.button === 1)) {
+        // Use pointerdown on container for panning (ignore pointerdowns that originate inside a pin)
+        this.container.addEventListener('pointerdown', (e) => {
+            if (e.target.closest && e.target.closest('.pin')) return; // don't start pan when interacting with a pin
+            if (e.button === 1 || e.target === this.container || e.target === this.content) {
                 this.isDraggingBoard = true;
                 this.dragStart = { x: e.clientX, y: e.clientY };
                 this.dragOffset = { ...this.state.pan };
                 this.container.style.cursor = 'grabbing';
+
+                // capture pointer to keep receiving events while panning
+                try { if (e.pointerId && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch (err) {}
+
+                // attach pointermove/up for panning lifecycle
+                const onMove = (ev) => this._onGlobalPointerMove(ev);
+                const onUp = (ev) => {
+                    try { if (ev.pointerId && ev.target.releasePointerCapture) ev.target.releasePointerCapture(ev.pointerId); } catch (err) {}
+                    this._onGlobalPointerUp();
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                };
+
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
             }
         });
 
-        window.addEventListener('mousemove', (e) => this._onGlobalMouseMove(e));
-        window.addEventListener('mouseup', () => this._onGlobalMouseUp());
-
-        // Zooming
+        // Wheel zoom (ctrl + wheel)
         this.container.addEventListener('wheel', (e) => {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
                 let newZoom = this.state.zoom * delta;
-                newZoom = Math.min(Math.max(0.1, newZoom), 5); // Clamp
+                newZoom = Math.min(Math.max(0.1, newZoom), 5);
                 this.state.setZoom(newZoom);
             }
         }, { passive: false });
 
-        // Zoom Buttons
-        document.getElementById('zoom-in').addEventListener('click', () => {
-            this.state.setZoom(Math.min(this.state.zoom + 0.1, 5));
-        });
-        document.getElementById('zoom-out').addEventListener('click', () => {
-            this.state.setZoom(Math.max(this.state.zoom - 0.1, 0.1));
-        });
+        const zin = document.getElementById('zoom-in');
+        const zout = document.getElementById('zoom-out');
+        if (zin) zin.addEventListener('click', () => this.state.setZoom(Math.min(this.state.zoom + 0.1, 5)));
+        if (zout) zout.addEventListener('click', () => this.state.setZoom(Math.max(this.state.zoom - 0.1, 0.1)));
     }
 
-    _onPinMouseDown(e, id) {
-        // Only trigger drag if clicking header or general area, not buttons/inputs
+    _startPinDrag(e, id) {
+        // Ignore interactions on actionable elements
         if (e.target.closest('.pin-delete') || e.target.closest('.pin-content')) return;
+
+        e.preventDefault();
+        e.stopPropagation();
 
         this.isDraggingPin = true;
         this.activePinId = id;
         this.dragStart = { x: e.clientX, y: e.clientY };
 
-        const pin = this.state.pins.find(p => p.id === id);
+        const pin = this.state.pins.find(p => p.id === id) || { x: 0, y: 0 };
         this.initialPinPos = { x: pin.x, y: pin.y };
+        this.lastKnownPinPos = { x: pin.x, y: pin.y };
 
-        // Bring to front
         const el = this.pinMap.get(id).element;
         el.classList.add('selected');
+
+        // Try to capture pointer to keep receiving events
+        try { if (e.pointerId && e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch (err) {}
+
+        window.addEventListener('pointermove', this._onPointerMove);
+        window.addEventListener('pointerup', this._onPointerUp);
+    }
+
+    _onPointerMove(e) {
+        
+        if (!this.isDraggingPin || !this.activePinId) return;
+
+        const dx = (e.clientX - this.dragStart.x) / this.state.zoom;
+        const dy = (e.clientY - this.dragStart.y) / this.state.zoom;
+
+        const newX = this.initialPinPos.x + dx;
+        const newY = this.initialPinPos.y + dy;
+
+        this.lastKnownPinPos = { x: newX, y: newY };
+        const cmp = this.pinMap.get(this.activePinId);
+        if (cmp) {
+            cmp.element.style.left = `${newX}px`;
+            cmp.element.style.top = `${newY}px`;
+        }
+    }
+
+    _onPointerUp(e) {
+        if (!this.isDraggingPin) return;
+
+        // Release pointer capture
+        try { if (e.pointerId && e.target.releasePointerCapture) e.target.releasePointerCapture(e.pointerId); } catch (err) {}
+
+        if (this.lastKnownPinPos && this.activePinId) {
+            const pin = this.state.pins.find(p => p.id === this.activePinId);
+            if (pin) this.state.updatePin({ ...pin, x: this.lastKnownPinPos.x, y: this.lastKnownPinPos.y });
+        }
+
+        if (this.pinMap.get(this.activePinId)) {
+            const el = this.pinMap.get(this.activePinId).element;
+            el.classList.remove('selected');
+        }
+
+        this.isDraggingPin = false;
+        this.activePinId = null;
+        this.lastKnownPinPos = null;
+
+        window.removeEventListener('pointermove', this._onPointerMove);
+        window.removeEventListener('pointerup', this._onPointerUp);
     }
 
     _onGlobalMouseMove(e) {
-        if (this.isDraggingBoard) {
-            const dx = e.clientX - this.dragStart.x;
-            const dy = e.clientY - this.dragStart.y;
-            this.state.setPan(this.dragOffset.x + dx, this.dragOffset.y + dy);
-        }
-
-        if (this.isDraggingPin && this.activePinId) {
-            const dx = (e.clientX - this.dragStart.x) / this.state.zoom;
-            const dy = (e.clientY - this.dragStart.y) / this.state.zoom;
-
-            const newX = this.initialPinPos.x + dx;
-            const newY = this.initialPinPos.y + dy;
-
-            // Optimistic UI update (bypass state full notify for performance)
-            const cmp = this.pinMap.get(this.activePinId);
-            if (cmp) {
-                cmp.element.style.transform = `translate(${newX}px, ${newY}px)`;
-            }
-        }
+        if (!this.isDraggingBoard) return;
+        const dx = e.clientX - this.dragStart.x;
+        const dy = e.clientY - this.dragStart.y;
+        this.state.setPan(this.dragOffset.x + dx, this.dragOffset.y + dy);
     }
 
     _onGlobalMouseUp() {
         this.isDraggingBoard = false;
         this.container.style.cursor = 'grab';
-
-        if (this.isDraggingPin && this.activePinId) {
-            // Commit final position
-            const cmp = this.pinMap.get(this.activePinId);
-            if (cmp) {
-                // Read computed transform or just re-calculate
-                // To be precise, we use the logic from mousemove
-                // But we are in mouseup, relying on last frame state is risky if we didn't track it.
-                // Better approach: Calculate final pos one last time based on dragStart.
-                // Or easier: we updated the DOM transform, let's just grab the current visual or re-calc.
-                // Re-calc is safer.
-
-                // Oops, 'e' is not here. We need to track last mouse pos or just trust the logic.
-                // Let's assume the user didn't teleport.
-                // Actually, let's just read the transform style from DOM? No, messy.
-                // Let's store the `currentDragPos` in mousemove.
-            }
-            // For now, let's just re-render to snap back to source of truth OR update source of truth if we had the coordinates.
-            // CORRECT FIX: We need to properly commit the logic.
-            // Simplification: We rely on the fact that `mousemove` updated the visual, 
-            // but we need the final coordinates to save to DB.
-            // Current limitation: I didn't store `newX/Y` in a scope accessible here.
-
-            // Allow sloppy fix: Next drag corrects it, but we want persistence.
-            // Let's force a "move end" logic if tracked.
-        }
-
-        // Since I can't easily access the `e` from mouseup here without refactoring `dragStart` to store `lastX/Y`.
-        // Let's patch `mousemove` to store `lastKnownPinPos`.
-        if (this.isDraggingPin) {
-            if (this.lastKnownPinPos) {
-                const pin = this.state.pins.find(p => p.id === this.activePinId);
-                if (pin) {
-                    this.state.updatePin({ ...pin, x: this.lastKnownPinPos.x, y: this.lastKnownPinPos.y });
-                }
-                this.lastKnownPinPos = null;
-            }
-
-            // Remove selection style
-            if (this.pinMap.get(this.activePinId)) {
-                this.pinMap.get(this.activePinId).element.classList.remove('selected');
-            }
-        }
-
-        this.isDraggingPin = false;
-        this.activePinId = null;
-    }
-
-    // Patching mousemove for the fix above
-    _onGlobalMouseMove(e) {
-        if (this.isDraggingBoard) {
-            const dx = e.clientX - this.dragStart.x;
-            const dy = e.clientY - this.dragStart.y;
-            this.state.setPan(this.dragOffset.x + dx, this.dragOffset.y + dy);
-        }
-
-        if (this.isDraggingPin && this.activePinId) {
-            const dx = (e.clientX - this.dragStart.x) / this.state.zoom;
-            const dy = (e.clientY - this.dragStart.y) / this.state.zoom;
-
-            const newX = this.initialPinPos.x + dx;
-            const newY = this.initialPinPos.y + dy;
-
-            this.lastKnownPinPos = { x: newX, y: newY };
-
-            // Optimistic UI update
-            const cmp = this.pinMap.get(this.activePinId);
-            if (cmp) {
-                cmp.element.style.transform = `translate(${newX}px, ${newY}px)`;
-            }
-        }
     }
 }
