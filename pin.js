@@ -58,7 +58,8 @@ export class PinComponent {
     }
 
     updatePosition(el = this.element) {
-        el.style.transform = `translate(${this.data.x}px, ${this.data.y}px)`;
+        el.style.left = `${this.data.x}px`;
+        el.style.top = `${this.data.y}px`;
     }
 
     _addListeners(el) {
