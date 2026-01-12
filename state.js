@@ -23,7 +23,6 @@ export class AppState {
         this.history = [JSON.parse(JSON.stringify(this.pins))];
         this.historyIndex = 0;
         this._notify();
-        console.log('State Initialized', this.pins.length, 'pins loaded');
     }
 
     subscribe(listener) {
