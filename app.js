@@ -51,7 +51,6 @@
         }
 
         async saveSnapshot(name, state) {
-            console.log('Snapshot saved', name, state.length + ' items');
             // Mock snapshot persistence
         }
 
@@ -91,7 +90,8 @@
         }
 
         updatePosition(el = this.element) {
-            el.style.transform = `translate(${this.data.x}px, ${this.data.y}px)`;
+            el.style.left = `${this.data.x}px`;
+            el.style.top = `${this.data.y}px`;
         }
 
         _buildTextPin(el) {
@@ -133,13 +133,10 @@
 
                 deleteBtn.addEventListener('mousedown', e => {
                     e.stopPropagation();
-                    console.log('Delete button mousedown');
                 });
                 deleteBtn.addEventListener('click', e => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log('Delete button clicked', this.data.id);
-                    // Removed confirm() for smoother UX (Undos are available)
                     this.events.onDelete(this.data.id);
                 });
             }
@@ -262,20 +259,17 @@
             this.zoomLevelEl = document.getElementById('zoom-level');
             this.pinMap = new Map();
 
-            this.dragState = {
-                active: false,
-                type: null, // 'BOARD' or 'PIN'
-                start: { x: 0, y: 0 },
-                offset: { x: 0, y: 0 },
-                pinId: null,
-                pinStart: { x: 0, y: 0 }
-            };
+            // simple pan/drag trackers
+            this.isPanning = false;
+            this.panStart = { x: 0, y: 0 };
+            this.panOffset = { x: 0, y: 0 };
+
+            this.activeDrag = null; // { id, start, pinStart }
 
             this._setupListeners();
         }
 
         handleUpdate(pins, view, type, payload) {
-            // Update View Transform
             this.content.style.transform = `translate(${view.pan.x}px, ${view.pan.y}px) scale(${view.zoom})`;
             if (this.zoomLevelEl) this.zoomLevelEl.textContent = `${Math.round(view.zoom * 100)}%`;
 
@@ -287,12 +281,10 @@
 
         _renderAll(pins) {
             this.content.innerHTML = '';
-            // Re-add hint
             const hint = document.createElement('div');
             hint.className = 'hint-text';
             hint.innerHTML = '<h3>Welcome to your Board! ✨</h3><p>Drag notes here. Double click to edit.</p>';
             this.content.appendChild(hint);
-
             this.pinMap.clear();
             pins.forEach(p => this._renderPin(p));
         }
@@ -304,31 +296,57 @@
                 onDelete: id => this.state.deletePin(id)
             });
 
-            // Ensure pointer events behave consistently (prevent browser gesture capture)
             cmp.element.style.touchAction = 'none';
+            // render pin
 
-            // Pointer Down Handler for Pin Dragging (use drag-handle for reliable starts)
-            const handle = cmp.element.querySelector('.pin-drag-handle') || cmp.element;
-            const _onPointerDown = (e) => {
-                // Debug log for diagnosing drag start
-                // console.log('pointerdown on pin', pin.id, e.target);
-                // Ignore if clicked on delete or content
+            // Attach pointerdown to element; handler will ignore clicks on content/delete
+            const onPointerDown = (e) => {
+                // pointerdown for drag
                 if (e.target.closest('.pin-delete') || e.target.closest('.pin-content')) return;
+                e.preventDefault();
+                e.stopPropagation();
 
-                this.dragState.active = true;
-                this.dragState.type = 'PIN';
-                this.dragState.pinId = pin.id;
-                this.dragState.start = { x: e.clientX, y: e.clientY };
-                this.dragState.pinStart = { x: pin.x, y: pin.y };
+                this.activeDrag = {
+                    id: pin.id,
+                    start: { x: e.clientX, y: e.clientY },
+                    pinStart: { x: pin.x, y: pin.y }
+                };
 
                 cmp.element.classList.add('selected');
-                // Capture the pointer so we continue receiving events even if cursor leaves the element
                 try { cmp.element.setPointerCapture(e.pointerId); } catch (err) {}
-                e.preventDefault(); // Stop text selection / native gestures
+
+                // attach move/up for this drag
+                const onMove = (ev) => {
+                    if (!this.activeDrag || this.activeDrag.id !== pin.id) return;
+                    // move
+                    const dx = (ev.clientX - this.activeDrag.start.x) / this.state.zoom;
+                    const dy = (ev.clientY - this.activeDrag.start.y) / this.state.zoom;
+                    const nx = this.activeDrag.pinStart.x + dx;
+                    const ny = this.activeDrag.pinStart.y + dy;
+                    cmp.element.style.left = `${nx}px`;
+                    cmp.element.style.top = `${ny}px`;
+                    this.activeDrag.last = { x: nx, y: ny };
+                };
+
+                const onUp = (ev) => {
+                    try { cmp.element.releasePointerCapture(ev.pointerId); } catch (err) {}
+                    // pointerup
+                    cmp.element.classList.remove('selected');
+                    if (this.activeDrag && this.activeDrag.last) {
+                        const p = this.state.pins.find(pp => pp.id === pin.id);
+                        if (p) this.state.updatePin({ ...p, x: this.activeDrag.last.x, y: this.activeDrag.last.y });
+                    }
+                    this.activeDrag = null;
+                    window.removeEventListener('pointermove', onMove);
+                    window.removeEventListener('pointerup', onUp);
+                };
+
+                window.addEventListener('pointermove', onMove);
+                window.addEventListener('pointerup', onUp);
             };
 
-            handle.addEventListener('pointerdown', _onPointerDown);
-            if (handle !== cmp.element) cmp.element.addEventListener('pointerdown', _onPointerDown);
+            // Attach with capture so we get the event before other listeners
+            cmp.element.addEventListener('pointerdown', onPointerDown, { capture: true });
 
             this.content.appendChild(cmp.element);
             this.pinMap.set(pin.id, cmp);
@@ -351,80 +369,33 @@
         }
 
         _setupListeners() {
-            // Board Pan
-            // Use pointerdown for panning the board
+            // Container pointerdown for panning (ignore clicks that start inside a pin)
             this.container.addEventListener('pointerdown', (e) => {
-                if (e.target === this.container || e.target === this.content || e.button === 1) {
-                    this.dragState.active = true;
-                    this.dragState.type = 'BOARD';
-                    this.dragState.start = { x: e.clientX, y: e.clientY };
-                    this.dragState.offset = { ...this.state.pan };
-                    this.container.style.cursor = 'grabbing';
+                if (e.target.closest && e.target.closest('.pin')) return;
+                if (e.button === 1 || e.target === this.container || e.target === this.content) {
+                    this.isPanning = true;
+                    this.panStart = { x: e.clientX, y: e.clientY };
+                    this.panOffset = { ...this.state.pan };
+
+                    const onMove = (ev) => {
+                        if (!this.isPanning) return;
+                        const dx = ev.clientX - this.panStart.x;
+                        const dy = ev.clientY - this.panStart.y;
+                        this.state.setPan(this.panOffset.x + dx, this.panOffset.y + dy);
+                    };
+
+                    const onUp = (ev) => {
+                        this.isPanning = false;
+                        window.removeEventListener('pointermove', onMove);
+                        window.removeEventListener('pointerup', onUp);
+                    };
+
+                    window.addEventListener('pointermove', onMove);
+                    window.addEventListener('pointerup', onUp);
                 }
             });
 
-            window.addEventListener('pointermove', (e) => {
-                if (!this.dragState.active) return;
-
-                if (this.dragState.type === 'BOARD') {
-                    const dx = e.clientX - this.dragState.start.x;
-                    const dy = e.clientY - this.dragState.start.y;
-                    this.state.setPan(this.dragState.offset.x + dx, this.dragState.offset.y + dy);
-                }
-                else if (this.dragState.type === 'PIN') {
-                    const zoom = this.state.zoom;
-                    const dx = (e.clientX - this.dragState.start.x) / zoom;
-                    const dy = (e.clientY - this.dragState.start.y) / zoom;
-
-                    const newX = this.dragState.pinStart.x + dx;
-                    const newY = this.dragState.pinStart.y + dy;
-
-                    // Direct DOM manipulation for smoothness
-                    const cmp = this.pinMap.get(this.dragState.pinId);
-                    if (cmp) {
-                        cmp.element.style.transform = `translate(${newX}px, ${newY}px)`;
-                        // Store temp pos for commit
-                        this.dragState._lastX = newX;
-                        this.dragState._lastY = newY;
-                    }
-                }
-            });
-
-            window.addEventListener('pointerup', (e) => {
-                if (!this.dragState.active) return;
-
-                if (this.dragState.type === 'PIN') {
-                    const id = this.dragState.pinId;
-                    const cmp = this.pinMap.get(id);
-                    if (cmp) {
-                        try { cmp.element.releasePointerCapture(e.pointerId); } catch (err) {}
-                        cmp.element.classList.remove('selected');
-                    }
-
-                    // Commit change if moved
-                    if (this.dragState._lastX !== undefined) {
-                        const pin = this.state.pins.find(p => p.id === id);
-                        if (pin) {
-                            this.state.updatePin({
-                                ...pin,
-                                x: this.dragState._lastX,
-                                y: this.dragState._lastY
-                            });
-                        }
-                        this.dragState._lastX = undefined;
-                    }
-                }
-
-                if (this.dragState.type === 'BOARD') {
-                    this.container.style.cursor = 'grab';
-                }
-
-                this.dragState.active = false;
-                this.dragState.type = null;
-                this.dragState.pinId = null;
-            });
-
-            // Zoom
+            // Wheel zoom
             this.container.addEventListener('wheel', (e) => {
                 if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
