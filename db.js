@@ -60,7 +60,6 @@ export class LocalDatabase {
         // We could store this in a 'snapshots' store if we added one, 
         // for now let's just log it or we can add that store in V2.
         // Let's dynamically add it if needed, or just use 'meta' for simple storage.
-        console.log('Snapshot saved (simulated)', snapshot);
         return snapshot;
     }
 
