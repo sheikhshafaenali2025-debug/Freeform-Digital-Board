@@ -427,3 +427,75 @@ body::after {
     70% { transform: translate(-3%, 5%) scale(0.98); opacity: 0.98; }
     100% { transform: translate(0%, 0%) scale(1); opacity: 1; }
 }
+/* === BACKGROUND STYLES === */
+
+body[data-bg="classic"] {
+  background-color: #fbfcfe;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(6,182,212,0.08), transparent 18%),
+    linear-gradient(120deg, rgba(6,182,212,0.06), rgba(255,122,89,0.03)),
+    var(--bg-pattern);
+  background-size: 200% 200%, cover, var(--bg-size);
+  animation: gradientShift 12s ease infinite;
+}
+
+/* Soft Blobs */
+body[data-bg="blobs"] {
+  background-color: #fdfcff;
+  background-image: none;
+}
+body[data-bg="blobs"]::before,
+body[data-bg="blobs"]::after {
+  content: '';
+  position: fixed;
+  width: 60vmax;
+  height: 60vmax;
+  filter: blur(100px);
+  border-radius: 50%;
+  animation: blobMove 25s ease-in-out infinite alternate;
+  z-index: -1;
+}
+body[data-bg="blobs"]::before {
+  background: radial-gradient(circle at 30% 30%, #06b6d4 0%, transparent 70%);
+  top: -10%; left: -10%;
+}
+body[data-bg="blobs"]::after {
+  background: radial-gradient(circle at 70% 70%, #ff7a59 0%, transparent 70%);
+  bottom: -10%; right: -10%;
+}
+
+/* Gradient Waves */
+body[data-bg="waves"] {
+  background: linear-gradient(120deg, #a1c4fd, #c2e9fb);
+  overflow: hidden;
+}
+body[data-bg="waves"]::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0;
+  width: 200%; height: 200%;
+  background: repeating-radial-gradient(circle at 0 0, #06b6d420, #06b6d400 50px);
+  animation: moveWaves 15s linear infinite;
+  z-index: -1;
+}
+@keyframes moveWaves {
+  0% { transform: translate(0,0); }
+  100% { transform: translate(-50px, -50px); }
+}
+
+/* Mindmap Grid */
+body[data-bg="grid"] {
+  background-color: #f9fafb;
+  background-image:
+    linear-gradient(0deg, transparent 24%, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.05) 26%, transparent 27%),
+    linear-gradient(90deg, transparent 24%, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.05) 26%, transparent 27%);
+  background-size: 40px 40px;
+}
+
+/* Galaxy Dark */
+body[data-bg="galaxy"] {
+  background: radial-gradient(circle at 20% 20%, rgba(50,150,255,0.15), transparent 60%),
+              radial-gradient(circle at 80% 80%, rgba(255,150,200,0.1), transparent 60%),
+              #0a0a0f;
+  color: #e5e7eb;
+}
